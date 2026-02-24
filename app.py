@@ -2,14 +2,13 @@ import streamlit as st
 import time
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="IST Clock & Timer", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="IST Clock & Alarms", layout="wide", initial_sidebar_state="collapsed")
 
-# 1. Custom CSS for Full Screen Experience
+# 1. CSS for Full Screen UI and Slide-up Alarm Panel
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap');
 
-/* Remove Streamlit padding and bars */
 [data-testid="stHeader"], [data-testid="stToolbar"] { display: none; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 
@@ -18,12 +17,10 @@ html, body, [data-testid="stAppViewContainer"] {
     color: white;
     overflow: hidden;
     height: 100vh;
-    width: 100vw;
 }
 
-/* Background Glow */
 [data-testid="stAppViewContainer"] {
-    background: radial-gradient(circle at center, #1a1a2e 0%, #050508 100%);
+    background: radial-gradient(circle at center, #111122 0%, #050508 100%);
 }
 
 .main-wrapper {
@@ -31,69 +28,104 @@ html, body, [data-testid="stAppViewContainer"] {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh; /* Full Viewport Height */
-    width: 100vw;
+    height: 90vh;
     text-align: center;
 }
 
 .date-display {
     font-family: 'Space Mono', monospace;
-    font-size: clamp(14px, 2vw, 24px);
+    font-size: 1.5rem;
     color: #6a6a9a;
     letter-spacing: 0.5em;
     text-transform: uppercase;
-    margin-bottom: 10px;
 }
 
 .time-display {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(150px, 35vw, 500px); /* Massive Full Screen Font */
+    font-size: clamp(150px, 30vw, 450px);
     line-height: 0.8;
     background: linear-gradient(180deg, #ffffff 30%, #4a4a8a 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 50px rgba(100, 100, 255, 0.2));
 }
 
-.seconds-display {
-    font-family: 'Space Mono', monospace;
-    font-size: clamp(20px, 4vw, 40px);
-    color: #4a4a8a;
-    margin-top: 20px;
-}
-
-/* Hidden control panel that appears on hover at bottom */
-.control-panel {
+/* Alarm Notification Overlay */
+.alarm-overlay {
     position: fixed;
-    bottom: 20px;
-    opacity: 0.1;
-    transition: opacity 0.3s;
+    top: 10%;
+    background: rgba(255, 50, 50, 0.2);
+    border: 2px solid #ff3232;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-family: 'Space Mono', monospace;
+    animation: pulse 1s infinite;
+    z-index: 1000;
 }
-.control-panel:hover { opacity: 1; }
 
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# 2. Timezone Logic (GMT +5:30)
+# 2. Session State for Alarms
+if "alarms" not in st.session_state:
+    st.session_state.alarms = []
+if "alarm_triggered" not in st.session_state:
+    st.session_state.alarm_triggered = False
+
+# 3. Timezone Logic (GMT +5:30)
 utc_now = datetime.utcnow()
-ist_offset = timedelta(hours=5, minutes=30)
-ist_now = utc_now + ist_offset
+ist_now = utc_now + timedelta(hours=5, minutes=30)
+current_time_str = ist_now.strftime("%H:%M")
+current_date_str = ist_now.strftime("%A, %B %d, %Y")
+seconds_str = ist_now.strftime("%S")
 
-# Formatting
-date_str = ist_now.strftime("%A, %B %d, %Y")
-hours_min = ist_now.strftime("%H:%M")
-seconds = ist_now.strftime("%S")
+# 4. Check Alarms
+for alarm in st.session_state.alarms:
+    if alarm == current_time_str and seconds_str == "00":
+        st.session_state.alarm_triggered = True
 
-# 3. Render Full Screen UI
+# 5. Display UI
+if st.session_state.alarm_triggered:
+    st.markdown(f'<div class="alarm-overlay">🚨 ALARM TRIGGERED: {current_time_str} 🚨</div>', unsafe_allow_html=True)
+    if st.button("DISMISS ALARM"):
+        st.session_state.alarm_triggered = False
+        st.rerun()
+
 st.markdown(f"""
 <div class="main-wrapper">
-    <div class="date-display">{date_str}</div>
-    <div class="time-display">{hours_min}</div>
-    <div class="seconds-display">:{seconds} <span style="font-size: 12px; letter-spacing: 2px;">IST (GMT+5:30)</span></div>
+    <div class="date-display">{current_date_str}</div>
+    <div class="time-display">{current_time_str}</div>
+    <div style="color: #4a4a8a; font-family: 'Space Mono'; letter-spacing: 5px;">
+        :{seconds_str} <span style="font-size: 12px;">IST</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-# 4. Auto-Refresh Logic
-# Refreshing every 1 second for the clock
+# 6. Control Panel (Bottom)
+with st.expander("Manage Alarms"):
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        new_alarm = st.time_input("Set Alarm Time", value=None)
+        if st.button("Add Alarm"):
+            if new_alarm:
+                alarm_formatted = new_alarm.strftime("%H:%M")
+                if alarm_formatted not in st.session_state.alarms:
+                    st.session_state.alarms.append(alarm_formatted)
+                    st.rerun()
+    
+    with col2:
+        st.write("Active Alarms:")
+        if not st.session_state.alarms:
+            st.write("No alarms set.")
+        for a in st.session_state.alarms:
+            if st.button(f"🗑️ Remove {a}"):
+                st.session_state.alarms.remove(a)
+                st.rerun()
+
+# 7. Auto-refresh
 time.sleep(1)
 st.rerun()

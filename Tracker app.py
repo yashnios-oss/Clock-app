@@ -1,77 +1,82 @@
 import streamlit as st
 import time
+import random
 from datetime import datetime, timedelta
 
 # --- 1. SYSTEM CONFIG ---
-st.set_page_config(page_title="Forest Focus | Zen OS", page_icon="🌲", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Forest Focus | Rewards", page_icon="💎", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 2. THE FOREST AESTHETIC (Zero White Boxes) ---
+# --- 2. THE REWARD UI (Aesthetic & High Contrast) ---
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&family=Bebas+Neue&family=Space+Mono:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&family=Bebas+Neue&family=Space+Mono:wght@700&display=swap');
 
-/* Main Background - Deep Forest Gradient */
 [data-testid="stAppViewContainer"] {
-    background: linear-gradient(135deg, #0a1f14 0%, #050a08 100%);
+    background: radial-gradient(circle at center, #0a1f14 0%, #050a08 100%);
     color: #e0f2f1;
     font-family: 'Plus Jakarta Sans', sans-serif;
 }
 [data-testid="stHeader"], [data-testid="stToolbar"] { display: none; }
 
-/* REFINED CSS: Killing all white default boxes */
+/* Readability Overrides */
 div[data-baseweb="input"], .stButton > button, div[data-baseweb="slider"], .stCheckbox {
     background-color: rgba(46, 204, 113, 0.05) !important;
     border: 1px solid rgba(46, 204, 113, 0.2) !important;
-    border-radius: 20px !important;
+    border-radius: 15px !important;
     color: #2ecc71 !important;
 }
 
-/* Make sure text is white and sharp */
-input { color: white !important; font-weight: 600 !important; }
-.stSlider [data-baseweb="slider"] { background-color: transparent !important; }
+/* Reward HUD Styling */
+.reward-hud {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 20px;
+    padding: 15px 25px;
+    margin-bottom: 25px;
+    display: flex;
+    justify-content: space-around;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+}
+.stat-box { text-align: center; }
+.stat-val { font-family: 'Bebas Neue'; font-size: 32px; color: #ffd700; }
+.stat-label { font-size: 10px; letter-spacing: 2px; color: #2ecc71; font-weight: 800; }
 
-/* Zen Glass Panels */
 .zen-panel {
     background: rgba(255, 255, 255, 0.02);
-    backdrop-filter: blur(30px);
+    backdrop-filter: blur(40px);
     border: 1px solid rgba(46, 204, 113, 0.1);
-    border-radius: 40px;
-    padding: 35px;
+    border-radius: 35px;
+    padding: 30px;
     margin-bottom: 20px;
 }
 
-/* Timer Ring Styling */
-.forest-ring-container { position: relative; width: 320px; margin: 0 auto; }
-.tree-display {
-    position: absolute; top: 52%; left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
+/* Forest Grid */
+.forest-map {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    padding: 15px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 20px;
 }
-.timer-countdown {
-    font-family: 'Bebas Neue'; font-size: 85px;
-    color: #2ecc71; line-height: 0.8; margin-top: 10px;
+.map-cell {
+    aspect-ratio: 1;
+    background: rgba(46, 204, 113, 0.03);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    border: 1px solid rgba(255,255,255,0.05);
 }
 
-.ring-bg { fill: none; stroke: rgba(255,255,255,0.03); stroke-width: 1.5; }
-.ring-active {
-    fill: none; stroke: #2ecc71; stroke-width: 2;
-    stroke-linecap: round; transition: stroke-dasharray 1s linear;
-}
-
-/* Master Clock */
-.ist-clock-small {
-    font-family: 'Space Mono'; font-size: 14px; color: #2ecc71;
-    letter-spacing: 4px; text-transform: uppercase; text-align: center;
-}
-.ist-clock-large {
-    font-family: 'Bebas Neue'; font-size: 110px; text-align: center;
-    background: linear-gradient(180deg, #fff, #2ecc71);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
+.timer-text { font-family: 'Bebas Neue'; font-size: 70px; color: #2ecc71; line-height: 1; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. STATE ENGINE ---
+# --- 3. STATE ENGINE (Currency & Rewards) ---
+if 'seeds' not in st.session_state: st.session_state.seeds = 0 # Earned via tasks
+if 'sunlight' not in st.session_state: st.session_state.sunlight = 0 # Earned via timer
+if 'forest_grid' not in st.session_state: st.session_state.forest_grid = []
 if 'inventory' not in st.session_state: st.session_state.inventory = []
 if 'f_active' not in st.session_state: st.session_state.f_active = False
 if 'f_secs' not in st.session_state: st.session_state.f_secs = 0
@@ -80,109 +85,106 @@ if 'f_total' not in st.session_state: st.session_state.f_total = 1
 def get_ist():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
-# --- 4. WORKSPACE LAYOUT ---
+# --- 4. REWARD HUD ---
+st.markdown(f"""
+<div class="reward-hud">
+    <div class="stat-box">
+        <div class="stat-val">🌱 {st.session_state.seeds}</div>
+        <div class="stat-label">SEEDS EARNED</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-val">☀ {st.session_state.sunlight}</div>
+        <div class="stat-label">SUNLIGHT COLLECTED</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-val">🌳 {len(st.session_state.forest_grid)}/25</div>
+        <div class="stat-label">FOREST DENSITY</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# --- 5. UI LAYOUT ---
 now_ist = get_ist()
-col_left, col_right = st.columns([1, 1.3], gap="large")
+col_left, col_right = st.columns([1, 1.4], gap="large")
 
 with col_left:
-    # IST MASTER MODULE
-    st.markdown(f"""
-    <div class="zen-panel">
-        <div class="ist-clock-small">India Standard Time</div>
-        <div class="ist-clock-large">{now_ist.strftime("%H:%M")}<span style="font-size:35px; opacity:0.6;">:{now_ist.strftime("%S")}</span></div>
-        <p style="text-align:center; color:#666; font-weight:bold;">{now_ist.strftime("%A, %d %B")}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # STUDY LOG
+    # TASK SYSTEM WITH REWARDS
     st.markdown('<div class="zen-panel">', unsafe_allow_html=True)
-    st.markdown("### 🌿 Growth Tasks")
-    with st.form("task_form", clear_on_submit=True):
+    st.markdown("### 🌿 Task Nursery")
+    with st.form("task_plant", clear_on_submit=True):
         c1, c2 = st.columns([3, 1])
-        t_in = c1.text_input("New Task", placeholder="Plant a goal...", label_visibility="collapsed")
+        t_in = c1.text_input("New Task", placeholder="Plant a goal (+5 Seeds)", label_visibility="collapsed")
         if c2.form_submit_button("PLANT"):
             if t_in:
                 st.session_state.inventory.append({"task": t_in, "done": False, "id": time.time()})
                 st.rerun()
-
+    
     for idx, item in enumerate(st.session_state.inventory):
         t_col, d_col = st.columns([0.85, 0.15])
-        st_label = f"**{item['task']}**" if not item['done'] else f"~~{item['task']}~~"
-        status = t_col.checkbox(st_label, value=item['done'], key=f"tk_{item['id']}")
-        if status != item['done']:
-            st.session_state.inventory[idx]['done'] = status
-            st.rerun()
+        if not item['done']:
+            if t_col.checkbox(f"{item['task']} (+10 Seeds)", key=f"tk_{item['id']}"):
+                st.session_state.inventory[idx]['done'] = True
+                st.session_state.seeds += 10 # Reward for completion
+                st.toast("Earned 10 Seeds! 🌱")
+                st.rerun()
+        else:
+            t_col.markdown(f"~~{item['task']}~~ ✅")
+        
         if d_col.button("🗑️", key=f"del_{item['id']}"):
             st.session_state.inventory.pop(idx)
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col_right:
+    # TIMER SYSTEM WITH REWARDS
     st.markdown('<div class="zen-panel" style="text-align:center;">', unsafe_allow_html=True)
-    st.markdown("<h3 style='margin-bottom:30px;'>GROW YOUR FOCUS</h3>", unsafe_allow_html=True)
-
-    # TIMER CONTROLS
     if not st.session_state.f_active:
-        mins = st.slider("Session Length (Minutes)", 1, 120, 25)
-        if st.button("🚀 START GROWING"):
+        st.subheader("Basking Timer")
+        mins = st.slider("Select Minutes", 5, 120, 25, step=5)
+        st.caption(f"Success will earn you {mins} Sunlight ☀")
+        if st.button("🚀 INITIATE PHOTOSYNTHESIS"):
             st.session_state.f_secs = mins * 60
             st.session_state.f_total = mins * 60
             st.session_state.f_active = True
             st.rerun()
     else:
-        if st.button("⏹ ABANDON SESSION"):
+        if st.button("⏹ ABANDON (Lose Progress)"):
             st.session_state.f_active = False
             st.session_state.f_secs = 0
             st.rerun()
 
-    # RADIAL PROGRESS & TREE EVOLUTION
-    timer_placeholder = st.empty()
-    
+    timer_spot = st.empty()
     while st.session_state.f_active and st.session_state.f_secs > 0:
         mm, ss = divmod(st.session_state.f_secs, 60)
         prog = (st.session_state.f_secs / st.session_state.f_total) * 100
-        
-        # Forest Logic: Change tree emoji based on progress
-        if prog > 75: tree = "🌱"
-        elif prog > 50: tree = "🌿"
-        elif prog > 25: tree = "🌳"
-        else: tree = "🌲"
-
-        timer_placeholder.markdown(f"""
-        <div class="forest-ring-container">
-            <svg viewBox="0 0 36 36">
-                <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                <path class="ring-active" stroke-dasharray="{prog}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-            </svg>
-            <div class="tree-display">
-                <div style="font-size: 60px;">{tree}</div>
-                <div class="timer-countdown">{mm:02d}:{ss:02d}</div>
+        timer_spot.markdown(f"""
+            <div style="text-align:center;">
+                <div class="timer-text">{mm:02d}:{ss:02d}</div>
+                <div style="color:#2ecc71; letter-spacing:3px;">GENERATING SUNLIGHT...</div>
             </div>
-        </div>
         """, unsafe_allow_html=True)
-        
         time.sleep(1)
         st.session_state.f_secs -= 1
-        
         if st.session_state.f_secs <= 0:
             st.session_state.f_active = False
+            earned_sun = st.session_state.f_total // 60
+            st.session_state.sunlight += earned_sun
+            # Reward: A rare tree if sunlight is high
+            tree_type = "✨🌲" if earned_sun >= 45 else "🌳"
+            st.session_state.forest_grid.append(tree_type)
             st.balloons()
             st.rerun()
 
-    # Idle State
-    if not st.session_state.f_active:
-        timer_placeholder.markdown(f"""
-        <div class="forest-ring-container">
-            <svg viewBox="0 0 36 36"><path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/></svg>
-            <div class="tree-display">
-                <div style="font-size: 60px; filter: grayscale(1);">🌲</div>
-                <div class="timer-countdown" style="color:#222;">00:00</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
+    # THE SACRED GROVE MAP
+    st.markdown("<h3 style='margin-bottom:10px;'>Your Sacred Grove</h3>", unsafe_allow_html=True)
+    grid_html = '<div class="forest-map">'
+    for i in range(25):
+        tree_icon = st.session_state.forest_grid[i] if i < len(st.session_state.forest_grid) else ""
+        grid_html += f'<div class="map-cell">{tree_icon}</div>'
+    grid_html += '</div>'
+    st.markdown(grid_html, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. SYSTEM REFRESH ---
+# AUTO REFRESH
 time.sleep(0.5)
 st.rerun()
